@@ -1,4 +1,4 @@
-package com.applicassion.pixelperception
+package com.applicassion.pixelperception.presentation.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,7 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.applicassion.pixelperception.ui.theme.PixelPerceptionTheme
+import com.applicassion.pixelperception.presentation.ui.theme.PixelPerceptionTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
