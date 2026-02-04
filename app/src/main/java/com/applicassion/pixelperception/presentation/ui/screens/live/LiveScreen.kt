@@ -1,5 +1,6 @@
 package com.applicassion.pixelperception.presentation.ui.screens.live
 
+import PerceptionOverlay
 import android.util.Size
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.CameraSelector
@@ -85,8 +86,8 @@ fun LiveScreen(
                     )
                 }
 
-                if (viewModel.isPerceptionOverlayEnabled.value) {
-                    Text("Perception")
+                if (viewModel.isPerceptionOverlayEnabled.value && viewModel.edgeDetection.value != null) {
+                    PerceptionOverlay(viewModel.edgeDetection.value!!)
                 }
 
                 if (viewModel.isDebugOverlayEnabled.value) {
