@@ -21,3 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "PixelPerception"
 include(":app")
+include(":opencv")
+project(":opencv").projectDir = file("third_party/opencv")
