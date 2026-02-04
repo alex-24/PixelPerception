@@ -1,18 +1,21 @@
 package com.applicassion.pixelperception.presentation.ui.screens.live
 
 import android.content.Context
+import android.util.Log
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.SurfaceRequest
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.applicassion.pixelperception.core.PerceptionEngine
+import com.applicassion.pixelperception.core.model.CoreOutputGrid
 import com.applicassion.pixelperception.platform.CameraController
 import com.applicassion.pixelperception.platform.OnCameraError
 import com.applicassion.pixelperception.platform.OnCameraReady
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,8 +25,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
         const val TAG = "LiveScreenViewModel"
     }
 
-    var cameraController : CameraController? = null
-        private set
+    @Inject
+    lateinit var cameraController : CameraController
     
     var isCameraPreviewEnabled = mutableStateOf(true)
     var isPerceptionOverlayEnabled = mutableStateOf(true)
@@ -34,7 +37,17 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
 
     private var isCameraStarted = false
 
+    private val perceptionEngine = PerceptionEngine(viewModelScope)
 
+    var edgeDetection: MutableState<CoreOutputGrid?> = mutableStateOf(null)
+
+    init {
+        viewModelScope.launch {
+            perceptionEngine.edgeDetectionFlow.collect {
+                edgeDetection.value = it
+            }
+        }
+    }
 
     fun startCamera(
         context: Context,
@@ -51,32 +64,33 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
             false -> isCameraStarted = true
         }
 
-        cameraController = cameraController ?: CameraController(context)
+        cameraController.setFrameListener(perceptionEngine)
 
-        viewModelScope
-            .launch(Dispatchers.IO) {
-                cameraController?.startCamera(
-                    cameraSelector = cameraSelector,
-                    enablePreview = enablePreview,
-                    targetSize = targetSize,
-                    lifecycleOwner = lifecycleOwner,
-                    onCameraReady = {
-                        onCameraReady?.invoke()
-                    },
-                    onError = {
-                        surfaceRequest.value = null
-                        onCameraError?.invoke(it)
-                    },
-                    onSurfaceRequestReady = { request ->
-                        surfaceRequest.value = request
-                    },
-                )
-            }
+        cameraController.startCamera(
+            cameraSelector = cameraSelector,
+            enablePreview = enablePreview,
+            targetSize = targetSize,
+            lifecycleOwner = lifecycleOwner,
+            onCameraReady = {
+                onCameraReady?.invoke()
+            },
+            onError = {
+                surfaceRequest.value = null
+                onCameraError?.invoke(it)
+            },
+            onSurfaceRequestReady = { request ->
+                surfaceRequest.value = request
+            },
+        )
+
     }
 
     fun stopCamera() {
-        cameraController?.stopCamera()
+        cameraController.stopCamera()
+        cameraController.setFrameListener(null)
         surfaceRequest.value = null
+        isCameraStarted = false
+        edgeDetection.value = null
     }
 
     override fun onCleared() {
