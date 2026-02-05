@@ -11,6 +11,8 @@ import com.applicassion.pixelperception.core.vision.edge_detection.CannyEdgeDete
 import com.applicassion.pixelperception.core.vision.edge_detection.EdgeDetectorConfig
 import com.applicassion.pixelperception.core.vision.motion_detection.FrameDiffMotionDetector
 import com.applicassion.pixelperception.core.vision.motion_detection.FrameDiffMotionDetectorConfig
+import com.applicassion.pixelperception.core.vision.motion_detection.LKSparseMotionDetector
+import com.applicassion.pixelperception.core.vision.motion_detection.LKSparseMotionDetectorConfig
 import com.applicassion.pixelperception.core.vision.motion_detection.TemporalMotionAccumulationDetector
 import com.applicassion.pixelperception.core.vision.motion_detection.TemporalMotionAccumulationDetectorConfig
 import com.applicassion.pixelperception.platform.OnFrameListener
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import org.opencv.core.CvType
+import org.opencv.core.Size
+import org.opencv.core.TermCriteria
 
 class PerceptionEngine(
     val coroutineScope: CoroutineScope
@@ -114,6 +118,7 @@ class PerceptionEngine(
                                                 )
                                             }
 
+                                            if (false)// todo selector
                                             FrameDiffMotionDetector
                                                 .processFrame(
                                                     image = gs,
@@ -137,6 +142,58 @@ class PerceptionEngine(
                                                             )
                                                         ).also { motion ->
                                                             if (false && _isOutputEnabled[OutputType.MotionDetectionMat] == true) { // todo manage stage outputs better
+                                                                _motionDetectionFlow.emit(
+                                                                    CoreDebugOutput.MotionDetection(mat = motion.clone().rotate90CCWThenFlipHorizontal())
+                                                                )
+                                                            }
+                                                        }.release()
+                                                }.release()
+
+
+                                            LKSparseMotionDetector
+                                                .processFrame(
+                                                    image = gs,
+                                                    config = LKSparseMotionDetectorConfig(
+                                                        maxCorners = 1600,
+                                                        qualityLevel = 0.01,
+                                                        minDistance = 8.0,
+                                                        blockSize = 15,
+                                                        k = 0.04,
+                                                        winSize = Size(
+                                                            25.0,
+                                                            25.0
+                                                        ),
+                                                        maxLevel = 3,
+                                                        termCriteria = TermCriteria(
+                                                            TermCriteria.COUNT + TermCriteria.EPS,
+                                                            20,
+                                                            0.03
+                                                        ),
+                                                        minEigThreshold = 1e-4,
+                                                        refreshEveryNFrames = 8,
+                                                        minTrackedPoints = 120,
+                                                        minPixelMotion = 1.0f,
+                                                        fixedNormMax = 12.0f,
+                                                        splatBlurKernel = Size(
+                                                            15.0,
+                                                            15.0
+                                                        )
+                                                    )
+                                                ).also { motion ->
+                                                    if (_isOutputEnabled[OutputType.MotionDetectionMat] == true) {
+                                                        _motionDetectionFlow.emit(
+                                                            CoreDebugOutput.MotionDetection(mat = motion.clone().rotate90CCWThenFlipHorizontal())
+                                                        )
+                                                    }
+                                                    TemporalMotionAccumulationDetector
+                                                        .processFrame(
+                                                            image = motion,
+                                                            config = TemporalMotionAccumulationDetectorConfig(
+                                                                decay = 0.5,
+                                                                gain = 1.0,
+                                                            )
+                                                        ).also { motion ->
+                                                            if (false && _isOutputEnabled[OutputType.MotionDetectionMat] == true) {
                                                                 _motionDetectionFlow.emit(
                                                                     CoreDebugOutput.MotionDetection(mat = motion.clone().rotate90CCWThenFlipHorizontal())
                                                                 )
