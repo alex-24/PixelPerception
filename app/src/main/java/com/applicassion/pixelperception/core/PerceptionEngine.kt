@@ -9,6 +9,10 @@ import com.applicassion.pixelperception.core.utils.rotate90CCWThenFlipHorizontal
 import com.applicassion.pixelperception.core.utils.toMat
 import com.applicassion.pixelperception.core.vision.edge_detection.CannyEdgeDetector
 import com.applicassion.pixelperception.core.vision.edge_detection.EdgeDetectorConfig
+import com.applicassion.pixelperception.core.vision.motion_detection.FrameDiffMotionDetector
+import com.applicassion.pixelperception.core.vision.motion_detection.FrameDiffMotionDetectorConfig
+import com.applicassion.pixelperception.core.vision.motion_detection.TemporalMotionAccumulationDetector
+import com.applicassion.pixelperception.core.vision.motion_detection.TemporalMotionAccumulationDetectorConfig
 import com.applicassion.pixelperception.platform.OnFrameListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -91,7 +95,7 @@ class PerceptionEngine(
 
                             frame.toMat(CvType.CV_8UC1)
                                 .also { greyScale ->
-                                    val gs = greyScale.applyGainClamped8U()
+                                    val gs = greyScale.applyGainClamped8U(2.0)
                                     _greyScaleDebugFlow.emit(
                                         CoreDebugOutput.GreyScale(mat = gs.clone().rotate90CCWThenFlipHorizontal())
                                     )
@@ -109,6 +113,38 @@ class PerceptionEngine(
                                                     CoreDebugOutput.EdgeDetection(mat = edges.clone().rotate90CCWThenFlipHorizontal())
                                                 )
                                             }
+
+                                            FrameDiffMotionDetector
+                                                .processFrame(
+                                                    image = gs,
+                                                    config = FrameDiffMotionDetectorConfig(
+                                                        enableSmoothing = true,
+                                                        smoothingKernelSize = 3.0,
+                                                        motionMinThreshold = 15.0
+                                                    )
+                                                ).also { motion ->
+                                                    if (_isOutputEnabled[OutputType.MotionDetectionMat] == true) {
+                                                        _motionDetectionFlow.emit(
+                                                            CoreDebugOutput.MotionDetection(mat = motion.clone().rotate90CCWThenFlipHorizontal())
+                                                        )
+                                                    }
+                                                    TemporalMotionAccumulationDetector
+                                                        .processFrame(
+                                                            image = motion,
+                                                            config = TemporalMotionAccumulationDetectorConfig(
+                                                                decay = 0.5,
+                                                                gain = 1.0,
+                                                            )
+                                                        ).also { motion ->
+                                                            if (false && _isOutputEnabled[OutputType.MotionDetectionMat] == true) { // todo manage stage outputs better
+                                                                _motionDetectionFlow.emit(
+                                                                    CoreDebugOutput.MotionDetection(mat = motion.clone().rotate90CCWThenFlipHorizontal())
+                                                                )
+                                                            }
+                                                        }.release()
+                                                }.release()
+
+
                                         }.release()
                             }.release()
                         } catch (e: Exception) {
