@@ -7,8 +7,8 @@ import com.applicassion.pixelperception.core.model.CoreOutputGrid
 import com.applicassion.pixelperception.core.utils.applyGainClamped8U
 import com.applicassion.pixelperception.core.utils.rotate90CCWThenFlipHorizontal
 import com.applicassion.pixelperception.core.utils.toMat
-import com.applicassion.pixelperception.core.vision.CannyEdgeDetector
-import com.applicassion.pixelperception.core.vision.EdgeDetectorConfig
+import com.applicassion.pixelperception.core.vision.edge_detection.CannyEdgeDetector
+import com.applicassion.pixelperception.core.vision.edge_detection.EdgeDetectorConfig
 import com.applicassion.pixelperception.platform.OnFrameListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

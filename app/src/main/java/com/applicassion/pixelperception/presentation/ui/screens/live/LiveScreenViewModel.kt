@@ -89,7 +89,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
 
 
     //var currentVisualizationType = mutableStateOf(VisualizationType.CameraPreview)
-    var currentVisualizationType = mutableStateOf(VisualizationType.GreyScale)
+    //var currentVisualizationType = mutableStateOf(VisualizationType.GreyScale)
+    var currentVisualizationType = mutableStateOf(VisualizationType.EdgeDetection)
         private set
 
     init {
