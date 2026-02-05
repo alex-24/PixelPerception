@@ -2,9 +2,10 @@ package com.applicassion.pixelperception.core
 
 import android.util.Log
 import androidx.camera.core.ImageProxy
+import com.applicassion.pixelperception.core.model.CoreDebugOutput
 import com.applicassion.pixelperception.core.model.CoreOutputGrid
-import com.applicassion.pixelperception.core.utils.applyGain
-import com.applicassion.pixelperception.core.utils.toCoreOutputGrid
+import com.applicassion.pixelperception.core.utils.applyGainClamped8U
+import com.applicassion.pixelperception.core.utils.rotate90CCWThenFlipHorizontal
 import com.applicassion.pixelperception.core.utils.toMat
 import com.applicassion.pixelperception.core.vision.CannyEdgeDetector
 import com.applicassion.pixelperception.core.vision.EdgeDetectorConfig
@@ -22,10 +23,28 @@ class PerceptionEngine(
     val coroutineScope: CoroutineScope
 ) : OnFrameListener {
 
-
     companion object {
         const val TAG = "PerceptionEngine"
     }
+
+    enum class OutputType {
+        PixelPerceptionGrid,
+        CameraFeedMat,
+        GreyScaleMat,
+        EdgeDetectionMat,
+        MotionDetectionMat,
+        DepthDetectionMat
+    }
+
+
+    private val _isOutputEnabled = mutableMapOf(
+        OutputType.PixelPerceptionGrid to false,
+        OutputType.CameraFeedMat to false,
+        OutputType.GreyScaleMat to false,
+        OutputType.EdgeDetectionMat to false,
+        OutputType.MotionDetectionMat to false,
+        OutputType.DepthDetectionMat to false,
+    )
 
     private val _framesFlow: MutableSharedFlow<ImageProxy> = MutableSharedFlow(
         extraBufferCapacity = 1,
@@ -33,13 +52,35 @@ class PerceptionEngine(
     )
     private val _frameCollector: Job?
 
-    private val _edgeDetectionFlow: MutableSharedFlow<CoreOutputGrid> = MutableSharedFlow(
+    private val _pixelPerceptionOutputFlow: MutableSharedFlow<CoreOutputGrid> = MutableSharedFlow(
         replay = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val edgeDetectionFlow = _edgeDetectionFlow.asSharedFlow()
+    val pixelPerceptionOutputFlow = _pixelPerceptionOutputFlow.asSharedFlow()
 
-    var enableEdgeDetectionUiOutput = true
+    private val _greyScaleDebugFlow: MutableSharedFlow<CoreDebugOutput.GreyScale> = MutableSharedFlow(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val greyScaleDebugFlow = _greyScaleDebugFlow.asSharedFlow()
+
+    private val _edgeDetectionFlow: MutableSharedFlow<CoreDebugOutput.EdgeDetection> = MutableSharedFlow(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val edgeDetectionDebugFlow = _edgeDetectionFlow.asSharedFlow()
+
+    private val _motionDetectionFlow: MutableSharedFlow<CoreDebugOutput.MotionDetection> = MutableSharedFlow(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val motionDetectionDebugFlow = _motionDetectionFlow.asSharedFlow()
+
+    private val _depthDetectionFlow: MutableSharedFlow<CoreDebugOutput.DepthDetection> = MutableSharedFlow(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val depthDetectionDebugFlow = _depthDetectionFlow.asSharedFlow()
 
     init {
         _frameCollector = coroutineScope
@@ -50,20 +91,23 @@ class PerceptionEngine(
 
                             frame.toMat(CvType.CV_8UC1)
                                 .also { greyScale ->
+                                    val gs = greyScale.applyGainClamped8U()
+                                    _greyScaleDebugFlow.emit(
+                                        CoreDebugOutput.GreyScale(mat = gs.clone().rotate90CCWThenFlipHorizontal())
+                                    )
+
                                     CannyEdgeDetector
                                         .processFrame(
-                                            image = greyScale,
+                                            image = gs,
                                             config = EdgeDetectorConfig(
                                                 lowThreshold = 60.0,
                                                 highThreshold = 160.0
                                             )
                                         ).also { edges ->
-                                            if (enableEdgeDetectionUiOutput) {
+                                            if (_isOutputEnabled[OutputType.EdgeDetectionMat] == true) {
                                                 _edgeDetectionFlow.emit(
-                                                    edges.toCoreOutputGrid(
-                                                        16 * 2,
-                                                        12 * 2
-                                                    ).applyGain())
+                                                    CoreDebugOutput.EdgeDetection(mat = edges.clone().rotate90CCWThenFlipHorizontal())
+                                                )
                                             }
                                         }.release()
                             }.release()
@@ -85,7 +129,34 @@ class PerceptionEngine(
         //TODO("Not yet implemented")
     }
 
+    fun enableSingleOutputType(
+        type: OutputType,
+        autoDisableOtherTypes: Boolean = true
+    ) {
+        _isOutputEnabled[type] = true
+
+        if (autoDisableOtherTypes) {
+            OutputType
+                .entries
+                .filter { it != type }
+                .forEach { _isOutputEnabled[it] = false }
+        }
+    }
+
+    fun enableAllOutputTypes() {
+        OutputType
+            .entries
+            .forEach { _isOutputEnabled[it] = true }
+    }
+
+    fun disableAllOutputTypes() {
+        OutputType
+            .entries
+            .forEach { _isOutputEnabled[it] = true }
+    }
+
     fun dispose() {
+        disableAllOutputTypes()
         _frameCollector?.cancel()
     }
 }
