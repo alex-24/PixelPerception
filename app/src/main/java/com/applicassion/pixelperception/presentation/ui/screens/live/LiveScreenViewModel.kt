@@ -1,6 +1,5 @@
 package com.applicassion.pixelperception.presentation.ui.screens.live
 
-import android.util.Log
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.SurfaceRequest
@@ -12,10 +11,12 @@ import androidx.lifecycle.viewModelScope
 import com.applicassion.pixelperception.core.PerceptionEngine
 import com.applicassion.pixelperception.core.model.CoreDebugOutput
 import com.applicassion.pixelperception.core.model.CoreOutputGrid
+import com.applicassion.pixelperception.core.utils.FloatMapping
 import com.applicassion.pixelperception.platform.CameraController
 import com.applicassion.pixelperception.platform.OnCameraError
 import com.applicassion.pixelperception.platform.OnCameraReady
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -26,14 +27,38 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
     }
 
 
-    enum class VisualizationType(label: String) {
-        All(label = "All"),
-        PixelPerception(label = "Pixel Perception"),
-        CameraPreview(label = "Camera Preview"),
-        GreyScale(label = "Greyscale"),
-        EdgeDetection(label = "Edge detection"),
-        MotionDetection(label = "Motion detection"),
-        DepthDetection(label = "Depth detection");
+    enum class VisualizationType {
+        All,
+        PixelPerception,
+        CameraPreview,
+        GreyScale,
+        EdgeDetection,
+        MotionDetection,
+        DepthDetection;
+
+        fun getLabel(): String {
+            return when(this) {
+                All -> "All"
+                PixelPerception -> "Pixel perception"
+                CameraPreview -> "Camera preview"
+                GreyScale -> "Greyscale"
+                EdgeDetection -> "Edge detection"
+                MotionDetection -> "Motion detection"
+                DepthDetection -> "Depth detection"
+            }
+        }
+
+        fun getFloatMapping(): FloatMapping? {
+            return when(this) {
+                All -> null
+                PixelPerception -> null
+                CameraPreview -> null
+                GreyScale -> FloatMapping.NormalizePerFrame
+                EdgeDetection -> FloatMapping.NormalizePerFrame
+                MotionDetection -> FloatMapping.NormalizePerFrame
+                DepthDetection -> FloatMapping.DepthColor
+            }
+        }
 
         fun toEngineOutputType(): PerceptionEngine.OutputType? {
             return when(this) {
@@ -50,7 +75,9 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
 
     @Inject
     lateinit var cameraController : CameraController
-    private val perceptionEngine = PerceptionEngine(viewModelScope)
+
+    @Inject
+    lateinit var perceptionEngine : PerceptionEngine
 
     val surfaceRequest = mutableStateOf<SurfaceRequest?>(null)
 
@@ -91,12 +118,14 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
     //var currentVisualizationType = mutableStateOf(VisualizationType.CameraPreview)
     //var currentVisualizationType = mutableStateOf(VisualizationType.GreyScale)
     //var currentVisualizationType = mutableStateOf(VisualizationType.EdgeDetection)
-    var currentVisualizationType = mutableStateOf(VisualizationType.MotionDetection)
+    //var currentVisualizationType = mutableStateOf(VisualizationType.MotionDetection)
+    var currentVisualizationType = mutableStateOf(VisualizationType.DepthDetection)
         private set
 
-    init {
-        setVisualizationType(currentVisualizationType.value)
-        viewModelScope.launch {
+    private var perceptionListenerJob: Job? = null
+
+    private fun startPerceptionListenerJob() {
+        perceptionListenerJob = viewModelScope.launch {
             launch {
                 perceptionEngine.pixelPerceptionOutputFlow.collect {
                     pixelPerceptionOutput.value = it
@@ -159,7 +188,13 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
             false -> isCameraStarted = true
         }
 
+        perceptionEngine.start(
+            coroutineScope = viewModelScope,
+            cameraSelector = cameraSelector
+        )
         cameraController.setFrameListener(perceptionEngine)
+        setVisualizationType(currentVisualizationType.value)
+        startPerceptionListenerJob()
 
         cameraController.startCamera(
             cameraSelector = cameraSelector,

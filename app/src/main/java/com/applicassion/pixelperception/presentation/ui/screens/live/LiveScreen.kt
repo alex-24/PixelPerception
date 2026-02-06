@@ -70,6 +70,7 @@ fun LiveScreen(
                     enablePreview = viewModel.currentVisualizationType.value == LiveScreenViewModel.VisualizationType.CameraPreview,
                     targetSize = Size(640, 480),
                     cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA,
+                    //cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
                     lifecycleOwner = lifecycleOwner,
                 )
             }
@@ -100,6 +101,7 @@ fun LiveScreen(
                             else -> {
                                 if (viewModel.getVisualizationData(visualizationType)?.value  != null) {
                                     DebugVisualization(
+                                        type = visualizationType,
                                         data = (viewModel.getVisualizationData(visualizationType)!!.value!! as CoreDebugOutput?)!!.getData() // todo delegate
                                     )
                                 }

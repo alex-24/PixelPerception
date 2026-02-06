@@ -14,12 +14,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import com.applicassion.pixelperception.core.utils.toBitmap
+import com.applicassion.pixelperception.presentation.ui.screens.live.LiveScreenViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.opencv.core.Mat
 
 @Composable
 fun DebugVisualization(
+    type: LiveScreenViewModel.VisualizationType,
     data: Mat,
     modifier: Modifier = Modifier
 ) {
@@ -30,7 +32,7 @@ fun DebugVisualization(
         if (data.empty()) {
             bitmap = null
         } else {
-            val converted = withContext(Dispatchers.IO) { data.toBitmap() }
+            val converted = withContext(Dispatchers.IO) { data.toBitmap(type.getFloatMapping()!!) }
             bitmap = converted
         }
     }
