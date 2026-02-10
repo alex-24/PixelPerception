@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+/third_party/opencv/build/
+/third_party/opencv/.cxx/
+/third_party/opencv/.gradle/

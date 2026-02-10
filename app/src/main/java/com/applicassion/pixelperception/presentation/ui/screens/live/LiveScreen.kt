@@ -3,6 +3,7 @@ package com.applicassion.pixelperception.presentation.ui.screens.live
 import android.util.Size
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.SurfaceRequest
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.applicassion.pixelperception.core.model.CoreDebugOutput
+import com.applicassion.pixelperception.presentation.ui.screens.live.overlays.DebugVisualization
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,10 +67,10 @@ fun LiveScreen(
         } else {
             LaunchedEffect(lifecycleOwner) {
                 viewModel.startCamera(
-                    context = context,
-                    enablePreview = true,
+                    enablePreview = viewModel.currentVisualizationType.value == LiveScreenViewModel.VisualizationType.CameraPreview,
                     targetSize = Size(640, 480),
                     cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA,
+                    //cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
                     lifecycleOwner = lifecycleOwner,
                 )
             }
@@ -79,15 +82,32 @@ fun LiveScreen(
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
-                if (viewModel.isCameraPreviewEnabled.value && viewModel.surfaceRequest.value != null) {
-                    CameraXViewfinder(
-                        surfaceRequest = viewModel.surfaceRequest.value!!
-                    )
-                }
+                viewModel
+                    .currentVisualizationType
+                    .value
+                    .let { visualizationType ->
 
-                if (viewModel.isPerceptionOverlayEnabled.value) {
-                    Text("Perception")
-                }
+                        when(viewModel.currentVisualizationType.value) {
+                            LiveScreenViewModel.VisualizationType.All -> {
+                                TODO()
+                            }
+                            LiveScreenViewModel.VisualizationType.CameraPreview -> {
+                                if (viewModel.getVisualizationData(visualizationType)?.value  != null) {
+                                    CameraXViewfinder(
+                                        surfaceRequest = viewModel.getVisualizationData(visualizationType)!!.value!! as SurfaceRequest
+                                    )
+                                }
+                            }
+                            else -> {
+                                if (viewModel.getVisualizationData(visualizationType)?.value  != null) {
+                                    DebugVisualization(
+                                        type = visualizationType,
+                                        data = (viewModel.getVisualizationData(visualizationType)!!.value!! as CoreDebugOutput?)!!.getData() // todo delegate
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                 if (viewModel.isDebugOverlayEnabled.value) {
                     Text("Debug")
