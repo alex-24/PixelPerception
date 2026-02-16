@@ -126,7 +126,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
     //var currentVisualizationType = mutableStateOf(VisualizationType.RawMotionDetection)
     //var currentVisualizationType = mutableStateOf(VisualizationType.AccumulatedMotionDetection)
     //var currentVisualizationType = mutableStateOf(VisualizationType.DepthDetection)
-    var currentVisualizationType = mutableStateOf(VisualizationType.PixelPerception)
+    //var currentVisualizationType = mutableStateOf(VisualizationType.PixelPerception)
+    var currentVisualizationType = mutableStateOf(VisualizationType.All)
         private set
 
     private var perceptionListenerJob: Job? = null
