@@ -1,5 +1,7 @@
 package com.applicassion.pixelperception.presentation.ui.screens.live
 
+import PerceptionOverlay
+import android.util.Log
 import android.util.Size
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.CameraSelector
@@ -27,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.applicassion.pixelperception.core.model.CoreDebugOutput
+import com.applicassion.pixelperception.core.model.CoreOutputGrid
 import com.applicassion.pixelperception.presentation.ui.screens.live.overlays.DebugVisualization
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,7 +70,8 @@ fun LiveScreen(
         } else {
             LaunchedEffect(lifecycleOwner) {
                 viewModel.startCamera(
-                    enablePreview = viewModel.currentVisualizationType.value == LiveScreenViewModel.VisualizationType.CameraPreview,
+                    //enablePreview = viewModel.currentVisualizationType.value == LiveScreenViewModel.VisualizationType.CameraPreview,
+                    enablePreview = true,
                     targetSize = Size(640, 480),
                     cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA,
                     //cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
@@ -99,11 +103,28 @@ fun LiveScreen(
                                 }
                             }
                             else -> {
-                                if (viewModel.getVisualizationData(visualizationType)?.value  != null) {
-                                    DebugVisualization(
-                                        type = visualizationType,
-                                        data = (viewModel.getVisualizationData(visualizationType)!!.value!! as CoreDebugOutput?)!!.getData() // todo delegate
+                                if (viewModel.surfaceRequest.value != null) {
+                                    Log.e("SANITY", "yes")
+                                    CameraXViewfinder(
+                                        surfaceRequest = viewModel.surfaceRequest.value as SurfaceRequest
                                     )
+                                } else {
+                                    Log.e("SANITY", "no")
+                                }
+
+                                when (viewModel.getVisualizationData(visualizationType)?.value) {
+                                    null -> {}
+                                    is CoreOutputGrid -> {
+                                        PerceptionOverlay(
+                                            grid = viewModel.getVisualizationData(visualizationType)!!.value!! as CoreOutputGrid
+                                        )
+                                    }
+                                    else -> {
+                                        DebugVisualization(
+                                            type = visualizationType,
+                                            data = (viewModel.getVisualizationData(visualizationType)!!.value!! as CoreDebugOutput?)!!.getData() // todo delegate
+                                        )
+                                    }
                                 }
                             }
                         }

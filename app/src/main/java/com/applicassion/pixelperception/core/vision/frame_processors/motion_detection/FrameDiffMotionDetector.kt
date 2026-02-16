@@ -1,7 +1,7 @@
-package com.applicassion.pixelperception.core.vision.motion_detection
+package com.applicassion.pixelperception.core.vision.frame_processors.motion_detection
 
-import com.applicassion.pixelperception.core.vision.IFrameProcessor
-import com.applicassion.pixelperception.core.vision.IFrameProcessorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.IFrameProcessor
+import com.applicassion.pixelperception.core.vision.frame_processors.IFrameProcessorConfig
 import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat

@@ -152,6 +152,7 @@ class CameraController(private val applicationContext: Context) {
                                 cameraSelector = cameraSelector,
                                 useCases = useCases
                             )
+                            Log.d(TAG, "successfully bound ${useCases.size} use case(s)")
                             onCameraReady()
                         } catch (e: Exception) {
                             Log.e(TAG, "Unable to bind camera use cases", e)

@@ -12,6 +12,7 @@ fun PerceptionOverlay(
     grid: CoreOutputGrid,
     modifier: Modifier = Modifier
 ) {
+
     Canvas(modifier = modifier.fillMaxSize()) {
 
         val cols = grid.width
@@ -19,7 +20,7 @@ fun PerceptionOverlay(
 
         val cellW = size.width / cols
         val cellH = size.height / rows
-        val baseR = 0.45f * min(cellW, cellH)
+        val baseR = 0.90f * min(cellW, cellH)
 
         var idx = 0
         for (r in 0 until rows) {
@@ -32,7 +33,7 @@ fun PerceptionOverlay(
                 val radius = baseR * v
                 if (radius > 0.5f) {
                     drawCircle(
-                        color = Color.Red.copy(alpha = (0.15f + 0.85f * v)),
+                        color = Color.Green.copy(alpha = (0.25f + 0.85f * v)),
                         radius = radius,
                         center = Offset(cx, cy)
                     )

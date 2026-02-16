@@ -1,4 +1,4 @@
-package com.applicassion.pixelperception.core.vision
+package com.applicassion.pixelperception.core.vision.frame_processors
 
 import org.opencv.core.Mat
 

@@ -33,7 +33,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
         CameraPreview,
         GreyScale,
         EdgeDetection,
-        MotionDetection,
+        RawMotionDetection,
+        AccumulatedMotionDetection,
         DepthDetection;
 
         fun getLabel(): String {
@@ -43,7 +44,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
                 CameraPreview -> "Camera preview"
                 GreyScale -> "Greyscale"
                 EdgeDetection -> "Edge detection"
-                MotionDetection -> "Motion detection"
+                RawMotionDetection -> "Raw motion detection"
+                AccumulatedMotionDetection -> "Accumulated motion detection"
                 DepthDetection -> "Depth detection"
             }
         }
@@ -55,7 +57,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
                 CameraPreview -> null
                 GreyScale -> FloatMapping.NormalizePerFrame
                 EdgeDetection -> FloatMapping.NormalizePerFrame
-                MotionDetection -> FloatMapping.NormalizePerFrame
+                RawMotionDetection -> FloatMapping.NormalizePerFrame
+                AccumulatedMotionDetection -> FloatMapping.NormalizePerFrame
                 DepthDetection -> FloatMapping.DepthColor
             }
         }
@@ -67,7 +70,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
                 CameraPreview -> PerceptionEngine.OutputType.CameraFeedMat
                 GreyScale -> PerceptionEngine.OutputType.GreyScaleMat
                 EdgeDetection -> PerceptionEngine.OutputType.EdgeDetectionMat
-                MotionDetection -> PerceptionEngine.OutputType.MotionDetectionMat
+                RawMotionDetection -> PerceptionEngine.OutputType.RawMotionDetectionMat
+                AccumulatedMotionDetection -> PerceptionEngine.OutputType.AccumulatedMotionDetectionMat
                 DepthDetection -> PerceptionEngine.OutputType.DepthDetectionMat
             }
         }
@@ -88,10 +92,9 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
     var pixelPerceptionOutput: MutableState<CoreOutputGrid?> = mutableStateOf(null)
     var greyScale: MutableState<CoreDebugOutput.GreyScale?> = mutableStateOf(null)
     var edgeDetection: MutableState<CoreDebugOutput.EdgeDetection?> = mutableStateOf(null)
-    var motionDetection: MutableState<CoreDebugOutput.MotionDetection?> = mutableStateOf(null)
+    var rawMotionDetection: MutableState<CoreDebugOutput.RawMotionDetection?> = mutableStateOf(null)
+    var accumulatedMotionDetection: MutableState<CoreDebugOutput.AccumulatedMotionDetection?> = mutableStateOf(null)
     var depthDetection: MutableState<CoreDebugOutput.DepthDetection?> = mutableStateOf(null)
-
-
     var isDebugOverlayEnabled = mutableStateOf(true)
 
     private val _isVisualizationEnabled = mapOf(
@@ -100,7 +103,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
         VisualizationType.CameraPreview to false,
         VisualizationType.GreyScale to false,
         VisualizationType.EdgeDetection to false,
-        VisualizationType.MotionDetection to false,
+        VisualizationType.RawMotionDetection to false,
+        VisualizationType.AccumulatedMotionDetection to false,
         VisualizationType.DepthDetection to false,
     )
 
@@ -110,7 +114,8 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
         VisualizationType.CameraPreview to surfaceRequest,
         VisualizationType.GreyScale to greyScale,
         VisualizationType.EdgeDetection to edgeDetection,
-        VisualizationType.MotionDetection to motionDetection,
+        VisualizationType.RawMotionDetection to rawMotionDetection,
+        VisualizationType.AccumulatedMotionDetection to accumulatedMotionDetection,
         VisualizationType.DepthDetection to depthDetection,
     )
 
@@ -118,8 +123,10 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
     //var currentVisualizationType = mutableStateOf(VisualizationType.CameraPreview)
     //var currentVisualizationType = mutableStateOf(VisualizationType.GreyScale)
     //var currentVisualizationType = mutableStateOf(VisualizationType.EdgeDetection)
-    //var currentVisualizationType = mutableStateOf(VisualizationType.MotionDetection)
-    var currentVisualizationType = mutableStateOf(VisualizationType.DepthDetection)
+    //var currentVisualizationType = mutableStateOf(VisualizationType.RawMotionDetection)
+    //var currentVisualizationType = mutableStateOf(VisualizationType.AccumulatedMotionDetection)
+    //var currentVisualizationType = mutableStateOf(VisualizationType.DepthDetection)
+    var currentVisualizationType = mutableStateOf(VisualizationType.PixelPerception)
         private set
 
     private var perceptionListenerJob: Job? = null
@@ -142,8 +149,13 @@ class LiveScreenViewModel @Inject constructor() : ViewModel() {
                 }
             }
             launch {
-                perceptionEngine.motionDetectionDebugFlow.collect {
-                    motionDetection.value = it
+                perceptionEngine.rawMotionDetectionDebugFlow.collect {
+                    rawMotionDetection.value = it
+                }
+            }
+            launch {
+                perceptionEngine.accumulatedMotionDetectionDebugFlow.collect {
+                    accumulatedMotionDetection.value = it
                 }
             }
             launch {

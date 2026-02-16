@@ -23,7 +23,13 @@ sealed class CoreDebugOutput() {
         }
     }
 
-    data class MotionDetection(val mat: Mat): CoreDebugOutput() {
+    data class RawMotionDetection(val mat: Mat): CoreDebugOutput() {
+        override fun getData(): Mat {
+            return mat
+        }
+    }
+
+    data class AccumulatedMotionDetection(val mat: Mat): CoreDebugOutput() {
         override fun getData(): Mat {
             return mat
         }

@@ -1,6 +1,7 @@
 package com.applicassion.pixelperception.core
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageProxy
@@ -9,16 +10,19 @@ import com.applicassion.pixelperception.core.model.CoreOutputGrid
 import com.applicassion.pixelperception.core.utils.adaptOrientationForDisplay
 import com.applicassion.pixelperception.core.utils.applyGainClamped8U
 import com.applicassion.pixelperception.core.utils.toMat
-import com.applicassion.pixelperception.core.vision.depth_perception.LiteRtDepthDetector
-import com.applicassion.pixelperception.core.vision.depth_perception.LiteRtDepthDetectorConfig
-import com.applicassion.pixelperception.core.vision.edge_detection.CannyEdgeDetector
-import com.applicassion.pixelperception.core.vision.edge_detection.EdgeDetectorConfig
-import com.applicassion.pixelperception.core.vision.motion_detection.FrameDiffMotionDetector
-import com.applicassion.pixelperception.core.vision.motion_detection.FrameDiffMotionDetectorConfig
-import com.applicassion.pixelperception.core.vision.motion_detection.LKSparseMotionDetector
-import com.applicassion.pixelperception.core.vision.motion_detection.LKSparseMotionDetectorConfig
-import com.applicassion.pixelperception.core.vision.motion_detection.TemporalMotionAccumulationDetector
-import com.applicassion.pixelperception.core.vision.motion_detection.TemporalMotionAccumulationDetectorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.depth_detection.LiteRtDepthDetector
+import com.applicassion.pixelperception.core.vision.frame_processors.depth_detection.LiteRtDepthDetectorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.edge_detection.CannyEdgeDetector
+import com.applicassion.pixelperception.core.vision.frame_processors.edge_detection.EdgeDetectorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.motion_detection.FrameDiffMotionDetector
+import com.applicassion.pixelperception.core.vision.frame_processors.motion_detection.FrameDiffMotionDetectorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.motion_detection.LKSparseMotionDetector
+import com.applicassion.pixelperception.core.vision.frame_processors.motion_detection.LKSparseMotionDetectorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.motion_detection.TemporalMotionAccumulationDetector
+import com.applicassion.pixelperception.core.vision.frame_processors.motion_detection.TemporalMotionAccumulationDetectorConfig
+import com.applicassion.pixelperception.core.vision.output_combinator.OutputAggregator
+import com.applicassion.pixelperception.core.vision.output_combinator.WeightedOutputAggregator
+import com.applicassion.pixelperception.core.vision.output_combinator.WeightedOutputAggregatorConfig
 import com.applicassion.pixelperception.platform.OnFrameListener
 import com.google.ai.edge.litert.Accelerator
 import kotlinx.coroutines.CoroutineScope
@@ -26,9 +30,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import org.opencv.core.CvType
+import org.opencv.core.Mat
 import org.opencv.core.Size
 import org.opencv.core.TermCriteria
 
@@ -47,21 +53,27 @@ class PerceptionEngine(
         CameraFeedMat,
         GreyScaleMat,
         EdgeDetectionMat,
-        MotionDetectionMat,
+        RawMotionDetectionMat,
+        AccumulatedMotionDetectionMat,
         DepthDetectionMat
     }
 
+    enum class MotionDetectionType {
+        FrameDiff,
+        SparseLK
+    }
 
     private val _isOutputEnabled = mutableMapOf(
         OutputType.PixelPerceptionGrid to false,
         OutputType.CameraFeedMat to false,
         OutputType.GreyScaleMat to false,
         OutputType.EdgeDetectionMat to false,
-        OutputType.MotionDetectionMat to false,
+        OutputType.RawMotionDetectionMat to false,
+        OutputType.AccumulatedMotionDetectionMat to false,
         OutputType.DepthDetectionMat to false,
     )
 
-    private val _framesFlow: MutableSharedFlow<ImageProxy> = MutableSharedFlow(
+    private val _framesFlow: MutableSharedFlow<Pair<ImageProxy, Long>> = MutableSharedFlow(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
@@ -85,38 +97,52 @@ class PerceptionEngine(
     )
     val edgeDetectionDebugFlow = _edgeDetectionFlow.asSharedFlow()
 
-    private val _motionDetectionFlow: MutableSharedFlow<CoreDebugOutput.MotionDetection> = MutableSharedFlow(
+    private val _rawMotionDetectionFlow: MutableSharedFlow<CoreDebugOutput.RawMotionDetection> = MutableSharedFlow(
         replay = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val motionDetectionDebugFlow = _motionDetectionFlow.asSharedFlow()
+    val rawMotionDetectionDebugFlow = _rawMotionDetectionFlow.asSharedFlow()
 
-    private val _depthDetectionFlow: MutableSharedFlow<CoreDebugOutput.DepthDetection> = MutableSharedFlow(
+    private val _accumulatedMotionDetectionFlow: MutableSharedFlow<CoreDebugOutput.AccumulatedMotionDetection> = MutableSharedFlow(
         replay = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val depthDetectionDebugFlow = _depthDetectionFlow.asSharedFlow()
+    val accumulatedMotionDetectionDebugFlow = _accumulatedMotionDetectionFlow.asSharedFlow()
+
+    private val _depthDetectionDebugFlow: MutableSharedFlow<CoreDebugOutput.DepthDetection> = MutableSharedFlow(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val depthDetectionDebugFlow = _depthDetectionDebugFlow.asSharedFlow()
+
+    private val _depthDetectionStateFlow: MutableStateFlow<Mat?> = MutableStateFlow(
+        value = null
+    )
+    val depthDetectionStateFlow = _depthDetectionDebugFlow.asSharedFlow()
 
     private var _depthDetector: LiteRtDepthDetector? = null
 
+    private var _depthDetectionFrequencyMs = 33 * 2 // 30fps
+    private var _lastDepthDetectionTsMs = 0L
+
     fun start(
         coroutineScope: CoroutineScope,
-        cameraSelector: CameraSelector
+        cameraSelector: CameraSelector,
+        motionDetectionType: MotionDetectionType = MotionDetectionType.SparseLK
     ) {
         this.coroutineScope = coroutineScope
         _frameCollector?.cancel()
         _frameCollector = coroutineScope
             .launch(Dispatchers.IO) {
                 _framesFlow
-                    .collect { frame ->
+                    .collect { (frame, timeStampMS) ->
                         try {
-
-                            if(_isOutputEnabled[OutputType.DepthDetectionMat] == true) {
+                            if (timeStampMS - _lastDepthDetectionTsMs >= _depthDetectionFrequencyMs) {
                                 if (_depthDetector == null) {
-                                    _depthDetector =  LiteRtDepthDetector(
+                                    _depthDetector = LiteRtDepthDetector(
                                         context = context,
                                         modelAssetPath = "models/midas-tflite-v2-1-small-lite-v1.tflite",
-                                        accelerator  = Accelerator.GPU
+                                        accelerator = Accelerator.GPU
                                     )
                                 }
 
@@ -127,14 +153,18 @@ class PerceptionEngine(
                                     )
                                 )?.also { depth ->
                                     if (_isOutputEnabled[OutputType.DepthDetectionMat] == true) {
-                                        _depthDetectionFlow.emit(
+                                        _depthDetectionDebugFlow.emit(
                                             CoreDebugOutput.DepthDetection(mat = depth.clone().adaptOrientationForDisplay(cameraSelector))
                                         )
                                     }
-                                }?.release()
+
+                                    _depthDetectionStateFlow.value?.release()
+                                    _depthDetectionStateFlow.value = depth
+                                }
+
+                                _lastDepthDetectionTsMs = SystemClock.elapsedRealtime()
                             }
 
-                            if (false)
                             frame.toMat(CvType.CV_8UC1)
                                 .also { greyScale ->
                                     val gs = greyScale.applyGainClamped8U(2.0)
@@ -156,90 +186,129 @@ class PerceptionEngine(
                                                 )
                                             }
 
-                                            if (false)// todo selector
-                                                FrameDiffMotionDetector
-                                                    .processFrame(
-                                                        image = gs,
-                                                        config = FrameDiffMotionDetectorConfig(
-                                                            enableSmoothing = true,
-                                                            smoothingKernelSize = 3.0,
-                                                            motionMinThreshold = 15.0
-                                                        )
-                                                    ).also { motion ->
-                                                        if (_isOutputEnabled[OutputType.MotionDetectionMat] == true) {
-                                                            _motionDetectionFlow.emit(
-                                                                CoreDebugOutput.MotionDetection(mat = motion.clone().adaptOrientationForDisplay(cameraSelector))
-                                                            )
-                                                        }
-                                                        TemporalMotionAccumulationDetector
-                                                            .processFrame(
-                                                                image = motion,
-                                                                config = TemporalMotionAccumulationDetectorConfig(
-                                                                    decay = 0.5,
-                                                                    gain = 1.0,
-                                                                )
-                                                            ).also { motion ->
-                                                                if (false && _isOutputEnabled[OutputType.MotionDetectionMat] == true) { // todo manage stage outputs better
-                                                                    _motionDetectionFlow.emit(
-                                                                        CoreDebugOutput.MotionDetection(mat = motion.clone().adaptOrientationForDisplay(cameraSelector))
-                                                                    )
-                                                                }
-                                                            }.release()
-                                                    }.release()
-
-
-                                            LKSparseMotionDetector
-                                                .processFrame(
-                                                    image = gs,
-                                                    config = LKSparseMotionDetectorConfig(
-                                                        maxCorners = 1600,
-                                                        qualityLevel = 0.01,
-                                                        minDistance = 8.0,
-                                                        blockSize = 15,
-                                                        k = 0.04,
-                                                        winSize = Size(
-                                                            25.0,
-                                                            25.0
-                                                        ),
-                                                        maxLevel = 3,
-                                                        termCriteria = TermCriteria(
-                                                            TermCriteria.COUNT + TermCriteria.EPS,
-                                                            20,
-                                                            0.03
-                                                        ),
-                                                        minEigThreshold = 1e-4,
-                                                        refreshEveryNFrames = 8,
-                                                        minTrackedPoints = 120,
-                                                        minPixelMotion = 1.0f,
-                                                        fixedNormMax = 12.0f,
-                                                        splatBlurKernel = Size(
-                                                            15.0,
-                                                            15.0
-                                                        )
-                                                    )
-                                                ).also { motion ->
-                                                    if (false && _isOutputEnabled[OutputType.MotionDetectionMat] == true) {
-                                                        _motionDetectionFlow.emit(
-                                                            CoreDebugOutput.MotionDetection(mat = motion.clone().adaptOrientationForDisplay(cameraSelector))
-                                                        )
-                                                    }
-                                                    TemporalMotionAccumulationDetector
+                                            var accumulatedMotion : Mat? = null
+                                            when (motionDetectionType) {
+                                                MotionDetectionType.FrameDiff -> {
+                                                    FrameDiffMotionDetector
                                                         .processFrame(
-                                                            image = motion,
-                                                            config = TemporalMotionAccumulationDetectorConfig(
-                                                                decay = 0.5,
-                                                                gain = 1.0,
+                                                            image = gs,
+                                                            config = FrameDiffMotionDetectorConfig(
+                                                                enableSmoothing = true,
+                                                                smoothingKernelSize = 3.0,
+                                                                motionMinThreshold = 15.0
                                                             )
                                                         ).also { motion ->
-                                                            if (_isOutputEnabled[OutputType.MotionDetectionMat] == true) {
-                                                                _motionDetectionFlow.emit(
-                                                                    CoreDebugOutput.MotionDetection(mat = motion.clone().adaptOrientationForDisplay(cameraSelector))
+                                                            if (_isOutputEnabled[OutputType.RawMotionDetectionMat] == true) {
+                                                                _rawMotionDetectionFlow.emit(
+                                                                    CoreDebugOutput.RawMotionDetection(mat = motion.clone().adaptOrientationForDisplay(cameraSelector))
                                                                 )
                                                             }
+                                                            TemporalMotionAccumulationDetector
+                                                                .processFrame(
+                                                                    image = motion,
+                                                                    config = TemporalMotionAccumulationDetectorConfig(
+                                                                        decay = 0.5,
+                                                                        gain = 1.0,
+                                                                    )
+                                                                ).also { accumulation ->
+                                                                    if (_isOutputEnabled[OutputType.AccumulatedMotionDetectionMat] == true) { // todo manage stage outputs better
+                                                                        _accumulatedMotionDetectionFlow.emit(
+                                                                            CoreDebugOutput.AccumulatedMotionDetection(mat = accumulation.clone().adaptOrientationForDisplay(cameraSelector))
+                                                                        )
+                                                                    }
+                                                                    accumulatedMotion = accumulation
+                                                                }
                                                         }.release()
-                                                }.release()
+                                                }
+                                                MotionDetectionType.SparseLK -> {
+                                                    LKSparseMotionDetector
+                                                        .processFrame(
+                                                            image = gs,
+                                                            config = LKSparseMotionDetectorConfig(
+                                                                maxCorners = 1600,
+                                                                qualityLevel = 0.01,
+                                                                minDistance = 8.0,
+                                                                blockSize = 15,
+                                                                k = 0.04,
+                                                                winSize = Size(
+                                                                    25.0,
+                                                                    25.0
+                                                                ),
+                                                                maxLevel = 3,
+                                                                termCriteria = TermCriteria(
+                                                                    TermCriteria.COUNT + TermCriteria.EPS,
+                                                                    20,
+                                                                    0.03
+                                                                ),
+                                                                minEigThreshold = 1e-4,
+                                                                refreshEveryNFrames = 8,
+                                                                minTrackedPoints = 120,
+                                                                minPixelMotion = 1.0f,
+                                                                fixedNormMax = 12.0f,
+                                                                splatBlurKernel = Size(
+                                                                    15.0,
+                                                                    15.0
+                                                                )
+                                                            )
+                                                        ).also { motion ->
+                                                            if (_isOutputEnabled[OutputType.RawMotionDetectionMat] == true) {
+                                                                _rawMotionDetectionFlow.emit(
+                                                                    CoreDebugOutput.RawMotionDetection(mat = motion.clone().adaptOrientationForDisplay(cameraSelector))
+                                                                )
+                                                            }
+                                                            TemporalMotionAccumulationDetector
+                                                                .processFrame(
+                                                                    image = motion,
+                                                                    config = TemporalMotionAccumulationDetectorConfig(
+                                                                        decay = 0.5,
+                                                                        gain = 1.0,
+                                                                    )
+                                                                ).also { accumulation ->
+                                                                    if (_isOutputEnabled[OutputType.AccumulatedMotionDetectionMat] == true) {
+                                                                        _accumulatedMotionDetectionFlow.emit(
+                                                                            CoreDebugOutput.AccumulatedMotionDetection(mat = accumulation.clone().adaptOrientationForDisplay(cameraSelector))
+                                                                        )
+                                                                    }
+                                                                    accumulatedMotion = accumulation
+                                                                }
+                                                        }.release()
+                                                }
+                                            }
 
+                                            WeightedOutputAggregator()
+                                                .apply {
+                                                    val edges01 = edges
+                                                    val motion01 = accumulatedMotion ?: Mat.zeros(edges.size(), edges.type())
+                                                    val depth01 = _depthDetectionStateFlow.value ?: Mat.zeros(edges.size(), edges.type())
+                                                    aggregate(
+                                                        edge01 = edges01,
+                                                        motion01 = motion01,
+                                                        depth01 = depth01,
+                                                        config = WeightedOutputAggregatorConfig(
+                                                            wE  = 0.30f,
+                                                            wM  = 0.40f,
+                                                            wD  = 0.30f,
+                                                            wNM  = 0.40f,
+                                                            wNE = 0.95f
+                                                        )
+                                                    ).also { aggregatedOutput01 ->
+                                                        edges01.release()
+                                                        motion01.release()
+                                                        depth01.release()
 
+                                                        projectToGrid(
+                                                            aggregate01 = aggregatedOutput01,
+                                                            gridW = 16 * 3,
+                                                            gridH = 9 * 3,
+                                                            mode = OutputAggregator.PoolingMode.AVG
+                                                        ).also { projection01 ->
+                                                            projection01.adaptOrientationForDisplay(cameraSelector)
+                                                                .also { pixelPerception ->
+                                                                    _pixelPerceptionOutputFlow.emit(pixelPerception)
+                                                                }
+                                                        }
+                                                    }
+                                            }
                                         }.release()
                             }.release()
                         } catch (e: Exception) {
@@ -253,7 +322,7 @@ class PerceptionEngine(
     }
 
     override fun onFrameSuccess(frame: ImageProxy) {
-        coroutineScope?.launch { _framesFlow.emit(frame) }
+        coroutineScope?.launch { _framesFlow.emit(Pair(frame, SystemClock.elapsedRealtime())) }
     }
 
     override fun onFrameError(error: Throwable) {
@@ -291,5 +360,7 @@ class PerceptionEngine(
         _frameCollector?.cancel()
         _depthDetector?.close()
         _depthDetector = null
+        _depthDetectionStateFlow.value?.release()
+        _depthDetectionStateFlow.value = null
     }
 }

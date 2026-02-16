@@ -232,6 +232,27 @@ fun CoreOutputGrid.applyGain(gain: Float = 3f): CoreOutputGrid {
     return copy(values = out)
 }
 
+fun CoreOutputGrid.rotate90CW(): CoreOutputGrid {
+    val inCols = width
+    val inRows = height
+    val outCols = inRows
+    val outRows = inCols
+
+    val out = FloatArray(outCols * outRows)
+
+    for (y in 0 until inRows) {
+        for (x in 0 until inCols) {
+            val v = values[y * inCols + x]
+
+            val x2 = inRows - 1 - y
+            val y2 = x
+            out[y2 * outCols + x2] = v
+        }
+    }
+
+    return CoreOutputGrid(outCols, outRows, out)
+}
+
 private fun CoreOutputGrid.rotate90CCW(): CoreOutputGrid {
     val inCols = width
     val inRows = height
@@ -267,6 +288,20 @@ private fun CoreOutputGrid.flipHorizontal(): CoreOutputGrid {
     }
 
     return CoreOutputGrid(cols, rows, out)
+}
+
+
+fun CoreOutputGrid.adaptOrientationForDisplay(cameraSelector: CameraSelector): CoreOutputGrid {
+
+    return when(cameraSelector) {
+        CameraSelector.DEFAULT_BACK_CAMERA -> {
+            rotate90CW()
+        }
+        CameraSelector.DEFAULT_FRONT_CAMERA -> {
+            rotate90CCW().flipHorizontal()
+        }
+        else -> throw UnsupportedOperationException("No transform implemented for this camera selector: $cameraSelector")
+    }
 }
 
 fun Mat.rotate90CCW(): Mat {

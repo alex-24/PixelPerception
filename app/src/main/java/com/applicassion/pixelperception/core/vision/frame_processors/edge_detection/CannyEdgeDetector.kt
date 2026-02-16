@@ -1,7 +1,7 @@
-package com.applicassion.pixelperception.core.vision.edge_detection
+package com.applicassion.pixelperception.core.vision.frame_processors.edge_detection
 
-import com.applicassion.pixelperception.core.vision.IFrameProcessor
-import com.applicassion.pixelperception.core.vision.IFrameProcessorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.IFrameProcessor
+import com.applicassion.pixelperception.core.vision.frame_processors.IFrameProcessorConfig
 import org.opencv.core.Mat
 import org.opencv.imgproc.Imgproc
 import kotlin.Double

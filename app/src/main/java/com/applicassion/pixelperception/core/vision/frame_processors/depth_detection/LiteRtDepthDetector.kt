@@ -1,13 +1,14 @@
-package com.applicassion.pixelperception.core.vision.depth_perception
+package com.applicassion.pixelperception.core.vision.frame_processors.depth_detection
 
 import android.content.Context
 import android.util.Log
-import com.applicassion.pixelperception.core.vision.IFrameProcessor
-import com.applicassion.pixelperception.core.vision.IFrameProcessorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.IFrameProcessor
+import com.applicassion.pixelperception.core.vision.frame_processors.IFrameProcessorConfig
 import com.google.ai.edge.litert.Accelerator
 import com.google.ai.edge.litert.CompiledModel
 import org.opencv.core.*
 import org.opencv.imgproc.Imgproc
+import kotlin.math.sqrt
 
 /**
  * LiteRT monocular depth detector (GPU by default) producing grayscale depth:
@@ -134,7 +135,7 @@ class LiteRtDepthDetector(
         
         // Infer output dimensions from buffer size (assume square output)
         val outPixels = out.size
-        val outDim = kotlin.math.sqrt(outPixels.toDouble()).toInt()
+        val outDim = sqrt(outPixels.toDouble()).toInt()
         
         if (outDim * outDim != outPixels) {
             Log.e(TAG, "Output size=$outPixels is not a perfect square. Cannot infer dimensions.")

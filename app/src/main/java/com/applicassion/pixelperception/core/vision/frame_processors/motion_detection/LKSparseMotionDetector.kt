@@ -1,10 +1,11 @@
-package com.applicassion.pixelperception.core.vision.motion_detection
+package com.applicassion.pixelperception.core.vision.frame_processors.motion_detection
 
-import com.applicassion.pixelperception.core.vision.IFrameProcessor
-import com.applicassion.pixelperception.core.vision.IFrameProcessorConfig
+import com.applicassion.pixelperception.core.vision.frame_processors.IFrameProcessor
+import com.applicassion.pixelperception.core.vision.frame_processors.IFrameProcessorConfig
 import org.opencv.core.*
 import org.opencv.imgproc.Imgproc
 import org.opencv.video.Video
+import kotlin.math.sqrt
 
 /**
  * Sparse Lucas–Kanade optical flow:
@@ -81,7 +82,7 @@ object LKSparseMotionDetector : IFrameProcessor<LKSparseMotionDetectorConfig> {
 
                 val dx = (p1.x - p0.x).toFloat()
                 val dy = (p1.y - p0.y).toFloat()
-                val mag = kotlin.math.sqrt(dx * dx + dy * dy)
+                val mag = sqrt(dx * dx + dy * dy)
 
                 // Ignore tiny jitter (subpixel noise)
                 if (mag >= config.minPixelMotion) {
@@ -171,7 +172,7 @@ object LKSparseMotionDetector : IFrameProcessor<LKSparseMotionDetectorConfig> {
                 val p1 = nextArr[i]
                 val dx = (p1.x - p0.x).toFloat()
                 val dy = (p1.y - p0.y).toFloat()
-                val mag = kotlin.math.sqrt(dx * dx + dy * dy)
+                val mag = sqrt(dx * dx + dy * dy)
                 if (mag >= config.minPixelMotion) {
                     // Keep the NEW point to track forward
                     kept.add(p1)
