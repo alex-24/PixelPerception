@@ -352,7 +352,7 @@ class PerceptionEngine(
     fun disableAllOutputTypes() {
         OutputType
             .entries
-            .forEach { _isOutputEnabled[it] = true }
+            .forEach { _isOutputEnabled[it] = false }
     }
 
     fun dispose() {
