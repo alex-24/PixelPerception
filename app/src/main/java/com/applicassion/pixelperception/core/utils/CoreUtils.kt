@@ -361,3 +361,40 @@ fun Mat.applyGainClamped8U(gain: Double = 3.0): Mat {
     scaled.release()
     return clamped
 }
+
+fun Mat.applyContrastLinear8U(
+    alpha: Double = 1.5,// contrast
+    beta: Double = 0.0// brightness shift
+): Mat {
+
+    val src8 = Mat()
+
+    // Ensure 8UC1
+    if (this.type() != CvType.CV_8UC1) {
+        this.convertTo(src8, CvType.CV_8UC1)
+    } else {
+        this.copyTo(src8)
+    }
+
+    val dst = Mat()
+    src8.convertTo(dst, CvType.CV_8UC1, alpha, beta)
+
+    src8.release()
+    return dst
+}
+
+fun Mat.applyHistogramEqualization8U(): Mat {
+
+    val src8 = Mat()
+    if (this.type() != CvType.CV_8UC1) {
+        this.convertTo(src8, CvType.CV_8UC1)
+    } else {
+        this.copyTo(src8)
+    }
+
+    val dst = Mat()
+    Imgproc.equalizeHist(src8, dst)
+
+    src8.release()
+    return dst
+}

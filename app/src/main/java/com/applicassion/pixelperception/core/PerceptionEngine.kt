@@ -8,7 +8,9 @@ import androidx.camera.core.ImageProxy
 import com.applicassion.pixelperception.core.model.CoreDebugOutput
 import com.applicassion.pixelperception.core.model.CoreOutputGrid
 import com.applicassion.pixelperception.core.utils.adaptOrientationForDisplay
+import com.applicassion.pixelperception.core.utils.applyContrastLinear8U
 import com.applicassion.pixelperception.core.utils.applyGainClamped8U
+import com.applicassion.pixelperception.core.utils.applyHistogramEqualization8U
 import com.applicassion.pixelperception.core.utils.toMat
 import com.applicassion.pixelperception.core.vision.frame_processors.depth_detection.LiteRtDepthDetector
 import com.applicassion.pixelperception.core.vision.frame_processors.depth_detection.LiteRtDepthDetectorConfig
@@ -167,7 +169,10 @@ class PerceptionEngine(
 
                             frame.toMat(CvType.CV_8UC1)
                                 .also { greyScale ->
-                                    val gs = greyScale.applyGainClamped8U(2.0)
+                                    val gs = greyScale
+                                        .applyHistogramEqualization8U()
+                                        //.applyContrastLinear8U(alpha = 1.2, beta = 5.0)
+                                        .applyGainClamped8U(2.0)
                                     _greyScaleDebugFlow.emit(
                                         CoreDebugOutput.GreyScale(mat = gs.clone().adaptOrientationForDisplay(cameraSelector))
                                     )
@@ -176,8 +181,8 @@ class PerceptionEngine(
                                         .processFrame(
                                             image = gs,
                                             config = EdgeDetectorConfig(
-                                                lowThreshold = 60.0,
-                                                highThreshold = 160.0
+                                                lowThreshold = 160.0,
+                                                highThreshold = 500.0
                                             )
                                         ).also { edges ->
                                             if (_isOutputEnabled[OutputType.EdgeDetectionMat] == true) {
@@ -310,6 +315,7 @@ class PerceptionEngine(
                                                     }
                                             }
                                         }.release()
+                                    gs.release()
                             }.release()
                         } catch (e: Exception) {
                             Log.e(TAG, "Frame processing failed", e)
